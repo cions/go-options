@@ -19,6 +19,9 @@ var (
 
 	// ErrUnknown is the error returned if an unknown option is provided.
 	ErrUnknown = errors.New("unknown option")
+
+	// ErrNoSubcommand is the error returned if no subcommand is provided.
+	ErrNoSubcommand = errors.New("no subcommand was provided")
 )
 
 // Kind defines how the option takes arguments.
@@ -179,10 +182,15 @@ func ParsePOSIX(opts Options, args []string) ([]string, error) {
 	return parse(opts, args, earlyExit)
 }
 
-// ParseS parses command-line options from the argument list, which should
-// not include the command name. It stop parsing at the first non-option argument.
-// Unlike ParsePOSIX, it does not absorb the first --, suitable for subcommand parsing.
+// ParseS parses command-line options from the argument list, which should not
+// include the command name. It stop parsing at the first non-option argument
+// and does not absorb the first --.
 // Returns the positional arguments.
+// If no positional arguments was provided, it will return ErrNoSubcommand.
 func ParseS(opts Options, args []string) ([]string, error) {
-	return parse(opts, args, earlyExit|noDDash)
+	args, err := parse(opts, args, earlyExit|noDDash)
+	if err == nil && len(args) == 0 {
+		return nil, ErrNoSubcommand
+	}
+	return args, err
 }

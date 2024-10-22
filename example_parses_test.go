@@ -89,10 +89,7 @@ func ExampleParseS() {
 
 	// args, err := options.ParseS(opts, os.Args[1:])
 	args, err := options.ParseS(opts, []string{"run", "-v", "file", "--", "cat"})
-	if err == nil && len(args) == 0 {
-		err = options.ErrHelp
-	}
-	if errors.Is(err, options.ErrHelp) {
+	if errors.Is(err, options.ErrHelp) || errors.Is(err, options.ErrNoSubcommand) {
 		fmt.Println("Usage: example [-c FILE] [-v] run [-n] [FILE...] -- COMMAND [ARGS...]")
 		os.Exit(0)
 	} else if errors.Is(err, options.ErrVersion) {
