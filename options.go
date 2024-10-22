@@ -16,6 +16,9 @@ var (
 
 	// ErrVersion is the error returned if the user requested to show version information.
 	ErrVersion = errors.New("version requested")
+
+	// ErrUnknown is the error returned if an unknown option is provided.
+	ErrUnknown = errors.New("unknown option")
 )
 
 // Kind defines how the option takes arguments.
@@ -148,7 +151,9 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 				return nil, fmt.Errorf("unknown option %q", name)
 			}
 		}
-		if err := opts.Option(name, value, hasValue); err != nil {
+		if err := opts.Option(name, value, hasValue); err == ErrUnknown {
+			return nil, fmt.Errorf("unknown option %q", name)
+		} else if err != nil {
 			return nil, fmt.Errorf("option %s: %w", name, err)
 		}
 	}

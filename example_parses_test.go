@@ -41,6 +41,8 @@ func (opts *ExampleGlobalOptions) Option(name, value string, hasValue bool) erro
 		return options.ErrHelp
 	case "--version":
 		return options.ErrVersion
+	default:
+		return options.ErrUnknown
 	}
 	return nil
 }

@@ -77,6 +77,8 @@ func (opts *ExampleOptions) Option(name, value string, hasValue bool) error {
 		return options.ErrHelp
 	case "--version":
 		return options.ErrVersion
+	default:
+		return options.ErrUnknown
 	}
 	return nil
 }
