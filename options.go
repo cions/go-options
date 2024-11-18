@@ -11,18 +11,31 @@ import (
 )
 
 var (
+	// ErrCmdline is the error returned if the command line is invalid.
+	ErrCmdline = errors.New("invalid command line")
+
 	// ErrHelp is the error returned if the user requested to show help message.
-	ErrHelp = errors.New("help requested")
+	ErrHelp = Errorf("help requested")
 
 	// ErrVersion is the error returned if the user requested to show version information.
-	ErrVersion = errors.New("version requested")
+	ErrVersion = Errorf("version requested")
 
 	// ErrUnknown is the error returned if an unknown option is provided.
-	ErrUnknown = errors.New("unknown option")
+	ErrUnknown = Errorf("unknown option")
 
 	// ErrNoSubcommand is the error returned if no subcommand is provided.
-	ErrNoSubcommand = errors.New("no subcommand was provided")
+	ErrNoSubcommand = Errorf("no subcommand was provided")
 )
+
+type cmdlineError struct{ error }
+
+func (e cmdlineError) Error() string        { return e.error.Error() }
+func (e cmdlineError) Unwrap() error        { return errors.Unwrap(e.error) }
+func (e cmdlineError) Is(target error) bool { return target == ErrCmdline }
+
+func Errorf(format string, a ...any) error {
+	return cmdlineError{fmt.Errorf(format, a...)}
+}
 
 // Kind defines how the option takes arguments.
 type Kind int
@@ -107,7 +120,7 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 				if hasValue {
 					args = args[1:]
 				} else if len(args) == 1 {
-					return nil, fmt.Errorf("option %s requires an argument", name)
+					return nil, Errorf("option %s requires an argument", name)
 				} else {
 					value = args[1]
 					hasValue = true
@@ -117,11 +130,11 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 				args = args[1:]
 			case Boolean:
 				if hasValue {
-					return nil, fmt.Errorf("option %s takes no argument", name)
+					return nil, Errorf("option %s takes no argument", name)
 				}
 				args = args[1:]
 			default:
-				return nil, fmt.Errorf("unknown option %q", name)
+				return nil, Errorf("unknown option %q", name)
 			}
 		case len(args[0]) > 2:
 			name = args[0][:2]
@@ -132,18 +145,18 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 				args = args[1:]
 			case Boolean:
 				if args[0][2] == '-' {
-					return nil, fmt.Errorf("invalid option '-'")
+					return nil, Errorf("invalid option '-'")
 				}
 				args[0] = "-" + args[0][2:]
 			default:
-				return nil, fmt.Errorf("unknown option %q", name)
+				return nil, Errorf("unknown option %q", name)
 			}
 		default:
 			name = args[0]
 			switch opts.Kind(name) {
 			case Required:
 				if len(args) == 1 {
-					return nil, fmt.Errorf("option %s requires an argument", name)
+					return nil, Errorf("option %s requires an argument", name)
 				}
 				value = args[1]
 				hasValue = true
@@ -151,13 +164,13 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 			case Boolean, Optional:
 				args = args[1:]
 			default:
-				return nil, fmt.Errorf("unknown option %q", name)
+				return nil, Errorf("unknown option %q", name)
 			}
 		}
 		if err := opts.Option(name, value, hasValue); err == ErrUnknown {
-			return nil, fmt.Errorf("unknown option %q", name)
+			return nil, Errorf("unknown option %q", name)
 		} else if err != nil {
-			return nil, fmt.Errorf("option %s: %w", name, err)
+			return nil, Errorf("option %s: %w", name, err)
 		}
 	}
 	if aopts, ok := opts.(OptionsWithArgs); ok {

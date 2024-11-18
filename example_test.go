@@ -71,7 +71,7 @@ func (opts *ExampleOptions) Option(name, value string, hasValue bool) error {
 		case "always", "never", "auto":
 			opts.Color = value
 		default:
-			return errors.New("possible values are 'always', 'never', 'auto'")
+			return options.Errorf("possible values are 'always', 'never', 'auto'")
 		}
 	case "-h", "--help":
 		return options.ErrHelp
@@ -99,7 +99,7 @@ func Example() {
 		os.Exit(0)
 	} else if err != nil {
 		fmt.Fprintf(os.Stdout, "example: error: %v\n", err)
-		os.Exit(2)
+		os.Exit(1)
 	}
 
 	fmt.Printf("opts.All: %v\n", opts.All)

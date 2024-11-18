@@ -319,3 +319,30 @@ func TestParseS(t *testing.T) {
 	CompareSlice(t, "After", opts.After, []string{})
 	CompareSlice(t, "Args", args, slices.Concat(opts.Before, opts.After))
 }
+
+func TestError(t *testing.T) {
+	if !errors.Is(ErrHelp, ErrCmdline) {
+		t.Errorf("ErrHelp is not ErrCmdline")
+	}
+	if !errors.Is(ErrVersion, ErrCmdline) {
+		t.Errorf("ErrVersion is not ErrCmdline")
+	}
+	if !errors.Is(ErrUnknown, ErrCmdline) {
+		t.Errorf("ErrUnknown is not ErrCmdline")
+	}
+	if !errors.Is(ErrNoSubcommand, ErrCmdline) {
+		t.Errorf("ErrNoSubcommand is not ErrCmdline")
+	}
+	err := Errorf("some error")
+	if !errors.Is(err, ErrCmdline) {
+		t.Errorf("err is not ErrCmdline")
+	}
+
+	werr := Errorf("option -a: %w", strconv.ErrSyntax)
+	if !errors.Is(werr, ErrCmdline) {
+		t.Errorf("werr is not ErrCmdline")
+	}
+	if !errors.Is(werr, strconv.ErrSyntax) {
+		t.Errorf("werr is not strconv.ErrSyntax")
+	}
+}
