@@ -16,6 +16,15 @@ type OptionCall struct {
 	HasValue bool
 }
 
+type OptionNCall struct {
+	Name   string
+	Values []string
+}
+
+func (l OptionNCall) Equal(r OptionNCall) bool {
+	return l.Name == r.Name && slices.Equal(l.Values, r.Values)
+}
+
 type ArgCall struct {
 	Index      int
 	Value      string
@@ -23,10 +32,11 @@ type ArgCall struct {
 }
 
 type TestOptions struct {
-	OptionHistory []OptionCall
-	ArgHistory    []ArgCall
-	Before        []string
-	After         []string
+	OptionHistory  []OptionCall
+	OptionNHistory []OptionNCall
+	ArgHistory     []ArgCall
+	Before         []string
+	After          []string
 }
 
 func (opts *TestOptions) Kind(name string) Kind {
@@ -37,6 +47,8 @@ func (opts *TestOptions) Kind(name string) Kind {
 		return Required
 	case "-o", "--optional":
 		return Optional
+	case "-s", "--set":
+		return TakeTwoArgs
 	case "--number":
 		return Required
 	case "--help":
@@ -67,6 +79,14 @@ func (opts *TestOptions) Option(name, value string, hasValue bool) error {
 	return nil
 }
 
+func (opts *TestOptions) OptionN(name string, values []string) error {
+	opts.OptionNHistory = append(opts.OptionNHistory, OptionNCall{
+		Name:   name,
+		Values: values,
+	})
+	return nil
+}
+
 func (opts *TestOptions) Arg(index int, value string, afterDDash bool) error {
 	opts.ArgHistory = append(opts.ArgHistory, ArgCall{
 		Index:      index,
@@ -92,6 +112,13 @@ func CompareSlice[S ~[]E, E comparable](t *testing.T, name string, actual, expec
 	}
 }
 
+func CompareSliceF[S ~[]E, E interface{ Equal(E) bool }](t *testing.T, name string, actual, expected S) {
+	t.Helper()
+	if !slices.EqualFunc(actual, expected, func(a, b E) bool { return a.Equal(b) }) {
+		t.Errorf("%s: expected %v, got %v", name, expected, actual)
+	}
+}
+
 func TestParse(t *testing.T) {
 	t.Run("no arguments", func(t *testing.T) {
 		opts := &TestOptions{}
@@ -100,6 +127,7 @@ func TestParse(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 		}
 		CompareSlice(t, "OptionHistory", opts.OptionHistory, []OptionCall{})
+		CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{})
 		CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{})
 		CompareSlice(t, "Before", opts.Before, []string{})
 		CompareSlice(t, "After", opts.After, []string{})
@@ -112,6 +140,7 @@ func TestParse(t *testing.T) {
 			"-a", "-b", "-r", "val1", "-rval2", "-o", "val3", "-oval4",
 			"--boolean", "--required=val5", "--required=", "--required", "val6",
 			"--optional=val7", "--optional=", "--optional", "val8", "val9",
+			"-s", "name", "value", "-sname", "value", "--set", "name", "value",
 		})
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
@@ -130,6 +159,11 @@ func TestParse(t *testing.T) {
 			{Name: "--optional", Value: "val7", HasValue: true},
 			{Name: "--optional", Value: "", HasValue: true},
 			{Name: "--optional", Value: "", HasValue: false},
+		})
+		CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{
+			{Name: "-s", Values: []string{"name", "value"}},
+			{Name: "-s", Values: []string{"name", "value"}},
+			{Name: "--set", Values: []string{"name", "value"}},
 		})
 		CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{
 			{Index: 0, Value: "val3", AfterDDash: false},
@@ -166,6 +200,7 @@ func TestParse(t *testing.T) {
 			{Name: "-b"},
 			{Name: "-o", Value: "", HasValue: false},
 		})
+		CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{})
 		CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{
 			{Index: 0, Value: "val4", AfterDDash: false},
 		})
@@ -187,6 +222,7 @@ func TestParse(t *testing.T) {
 			{Name: "--required", Value: "--", HasValue: true},
 			{Name: "-b"},
 		})
+		CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{})
 		CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{
 			{Index: 0, Value: "val1", AfterDDash: false},
 			{Index: 1, Value: "val2", AfterDDash: true},
@@ -235,6 +271,26 @@ func TestParse(t *testing.T) {
 			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
+		_, err = Parse(&TestOptions{}, []string{"--set=name", "value"})
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
+		}
+
+		_, err = Parse(&TestOptions{}, []string{"--set", "value"})
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
+		}
+
+		_, err = Parse(&TestOptions{}, []string{"-s", "value"})
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
+		}
+
+		_, err = Parse(&TestOptions{}, []string{"-svalue"})
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
+		}
+
 		_, err = Parse(&TestOptions{}, []string{"-x"})
 		if !errors.Is(err, ErrCmdline) {
 			t.Errorf("expected ErrCmdline, got %#v", err)
@@ -274,6 +330,7 @@ func TestParsePOSIX(t *testing.T) {
 		{Name: "-a"},
 		{Name: "--required", Value: "--", HasValue: true},
 	})
+	CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{})
 	CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{
 		{Index: 0, Value: "val1", AfterDDash: false},
 		{Index: 1, Value: "-b", AfterDDash: false},
@@ -305,6 +362,7 @@ func TestParseS(t *testing.T) {
 		{Name: "-a"},
 		{Name: "--required", Value: "--", HasValue: true},
 	})
+	CompareSliceF(t, "OptionNHistory", opts.OptionNHistory, []OptionNCall{})
 	CompareSlice(t, "ArgHistory", opts.ArgHistory, []ArgCall{
 		{Index: 0, Value: "val1", AfterDDash: false},
 		{Index: 1, Value: "-b", AfterDDash: false},

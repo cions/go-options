@@ -45,6 +45,7 @@ const (
 	Boolean
 	Required
 	Optional
+	TakeTwoArgs
 )
 
 // Options is an interface that defines the set of options and stores the parsed result.
@@ -54,6 +55,15 @@ type Options interface {
 
 	// Option is called for each option with name (including dashes) and value.
 	Option(name, value string, hasValue bool) error
+}
+
+// OptionsWithOptionN is an interface that adds the OptionN method to Options.
+//
+// OptionN is called for each TakeTwoArgs option instead of Option.
+type OptionsWithOptionN interface {
+	Options
+
+	OptionN(name string, values []string) error
 }
 
 // OptionsWithArg is an interface that adds the Arg method to Options.
@@ -119,7 +129,7 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 			case Required:
 				if hasValue {
 					args = args[1:]
-				} else if len(args) == 1 {
+				} else if len(args) < 2 {
 					return nil, Errorf("option %s requires an argument", name)
 				} else {
 					value = args[1]
@@ -133,6 +143,21 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 					return nil, Errorf("option %s takes no argument", name)
 				}
 				args = args[1:]
+			case TakeTwoArgs:
+				if hasValue {
+					return nil, Errorf("option %s takes 2 arguments; %s=VALUE form is not permitted", name, name)
+				} else if len(args) < 3 {
+					return nil, Errorf("option %s requires 2 arguments", name)
+				}
+				if nopts, ok := opts.(OptionsWithOptionN); ok {
+					if err := nopts.OptionN(name, args[1:3]); err != nil {
+						return nil, Errorf("option %s: %w", name, err)
+					}
+				} else {
+					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
+				}
+				args = args[3:]
+				continue
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
@@ -148,6 +173,21 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 					return nil, Errorf("invalid option '-'")
 				}
 				args[0] = "-" + args[0][2:]
+			case TakeTwoArgs:
+				value = args[0][2:]
+				if len(args) < 2 {
+					return nil, Errorf("option %s requires 2 arguments", name)
+				}
+				values := []string{args[0][2:], args[1]}
+				if nopts, ok := opts.(OptionsWithOptionN); ok {
+					if err := nopts.OptionN(name, values); err != nil {
+						return nil, Errorf("option %s: %w", name, err)
+					}
+				} else {
+					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
+				}
+				args = args[2:]
+				continue
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
@@ -163,6 +203,20 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 				args = args[2:]
 			case Boolean, Optional:
 				args = args[1:]
+			case TakeTwoArgs:
+				if len(args) < 3 {
+					return nil, Errorf("option %s requires 2 arguments", name)
+				}
+				values := []string{args[1], args[2]}
+				if nopts, ok := opts.(OptionsWithOptionN); ok {
+					if err := nopts.OptionN(name, values); err != nil {
+						return nil, Errorf("option %s: %w", name, err)
+					}
+				} else {
+					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
+				}
+				args = args[3:]
+				continue
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
