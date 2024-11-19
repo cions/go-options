@@ -204,57 +204,60 @@ func TestParse(t *testing.T) {
 	t.Run("errors", func(t *testing.T) {
 		_, err := Parse(&TestOptions{}, []string{"--help"})
 		if !errors.Is(err, ErrHelp) {
-			t.Errorf("expected ErrHelp, got %v", err)
+			t.Errorf("expected ErrHelp, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"--version"})
 		if !errors.Is(err, ErrVersion) {
-			t.Errorf("expected ErrVersion, got %v", err)
+			t.Errorf("expected ErrVersion, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"--number=NaN"})
 		if !errors.Is(err, strconv.ErrSyntax) {
-			t.Errorf("expected ErrSyntax, got %v", err)
+			t.Errorf("expected ErrSyntax, got %#v", err)
+		}
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"-r"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"--required"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"--boolean=true"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"-x"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"-ax"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"-xa"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"--unknown"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 
 		_, err = Parse(&TestOptions{}, []string{"-a-"})
-		if err == nil {
-			t.Errorf("expected an error, got nil")
+		if !errors.Is(err, ErrCmdline) {
+			t.Errorf("expected ErrCmdline, got %#v", err)
 		}
 	})
 }
