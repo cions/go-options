@@ -1,4 +1,4 @@
-// Copyright (c) 2024 cions
+// Copyright (c) 2024-2025 cions
 // Licensed under the MIT License. See LICENSE for details.
 
 package options_test
@@ -91,13 +91,14 @@ func Example() {
 
 	// args, err := options.Parse(opts, os.Args[1:])
 	args, err := options.Parse(opts, []string{"-av", "-n", "42", "--color", "argument"})
-	if errors.Is(err, options.ErrHelp) {
+	switch {
+	case errors.Is(err, options.ErrHelp):
 		fmt.Println("Usage: example [-av] [-f FILE] [-n NUM] [--color[={always,never,auto}]] [ARGS...]")
 		os.Exit(0)
-	} else if errors.Is(err, options.ErrVersion) {
+	case errors.Is(err, options.ErrVersion):
 		fmt.Println("example 1.0.0")
 		os.Exit(0)
-	} else if err != nil {
+	case err != nil:
 		fmt.Fprintf(os.Stdout, "example: error: %v\n", err)
 		os.Exit(1)
 	}

@@ -1,4 +1,4 @@
-// Copyright (c) 2024 cions
+// Copyright (c) 2024-2025 cions
 // Licensed under the MIT License. See LICENSE for details.
 
 // Package options implements command-line option parsing.
@@ -33,6 +33,7 @@ func (e cmdlineError) Error() string        { return e.error.Error() }
 func (e cmdlineError) Unwrap() error        { return errors.Unwrap(e.error) }
 func (e cmdlineError) Is(target error) bool { return target == ErrCmdline }
 
+// Errorf wraps fmt.Errorf so that the returned error satisfy errors.Is(err, ErrCmdline).
 func Errorf(format string, a ...any) error {
 	return cmdlineError{fmt.Errorf(format, a...)}
 }
@@ -68,7 +69,8 @@ type OptionsWithOptionN interface {
 
 // OptionsWithArg is an interface that adds the Arg method to Options.
 //
-// Arg is called for each positional argument, with 0-based index and a boolean indicating whether it appears before or after --.
+// Arg is called for each positional argument, with 0-based index and a boolean
+// indicating whether it appears before or after --.
 type OptionsWithArg interface {
 	Options
 
@@ -96,6 +98,7 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 	for len(args) > 0 {
 		var name, value string
 		var hasValue bool
+
 		switch {
 		case args[0] == "--" && flags&noDDash == 0:
 			if aopts, ok := opts.(OptionsWithArg); ok {
@@ -105,133 +108,172 @@ func parse(opts Options, args []string, flags int) ([]string, error) {
 					}
 				}
 			}
+
 			if aopts, ok := opts.(OptionsWithArgs); ok {
 				if err := aopts.Args(positional, args[1:]); err != nil {
 					return nil, err
 				}
 			}
+
 			return append(positional, args[1:]...), nil
-		case !strings.HasPrefix(args[0], "-"), args[0] == "-", args[0] == "--", exited:
+
+		case exited, !strings.HasPrefix(args[0], "-"), args[0] == "-", args[0] == "--":
 			if aopts, ok := opts.(OptionsWithArg); ok {
 				if err := aopts.Arg(len(positional), args[0], false); err != nil {
 					return nil, err
 				}
 			}
+
 			positional = append(positional, args[0])
 			args = args[1:]
 			if flags&earlyExit != 0 {
 				exited = true
 			}
+
 			continue
+
 		case strings.HasPrefix(args[0], "--"):
 			name, value, hasValue = strings.Cut(args[0], "=")
+
 			switch opts.Kind(name) {
 			case Required:
+				if !hasValue && len(args) < 2 {
+					return nil, Errorf("option %s requires an argument", name)
+				}
+
 				if hasValue {
 					args = args[1:]
-				} else if len(args) < 2 {
-					return nil, Errorf("option %s requires an argument", name)
 				} else {
 					value = args[1]
 					hasValue = true
 					args = args[2:]
 				}
+
 			case Optional:
 				args = args[1:]
+
 			case Boolean:
 				if hasValue {
 					return nil, Errorf("option %s takes no argument", name)
 				}
+
 				args = args[1:]
+
 			case TakeTwoArgs:
 				if hasValue {
 					return nil, Errorf("option %s takes 2 arguments; %s=VALUE form is not permitted", name, name)
-				} else if len(args) < 3 {
+				}
+				if len(args) < 3 {
 					return nil, Errorf("option %s requires 2 arguments", name)
 				}
+
 				if nopts, ok := opts.(OptionsWithOptionN); ok {
 					if err := nopts.OptionN(name, args[1:3]); err != nil {
 						return nil, Errorf("option %s: %w", name, err)
 					}
 				} else {
-					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
+					panic("Kind() returned TakeTwoArgs but OptionN method is not implemented")
 				}
+
 				args = args[3:]
 				continue
+
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
+
 		case len(args[0]) > 2:
 			name = args[0][:2]
+
 			switch opts.Kind(name) {
 			case Required, Optional:
 				value = args[0][2:]
 				hasValue = true
 				args = args[1:]
+
 			case Boolean:
 				if args[0][2] == '-' {
 					return nil, Errorf("invalid option '-'")
 				}
+
 				args[0] = "-" + args[0][2:]
+
 			case TakeTwoArgs:
-				value = args[0][2:]
 				if len(args) < 2 {
 					return nil, Errorf("option %s requires 2 arguments", name)
 				}
+
 				values := []string{args[0][2:], args[1]}
 				if nopts, ok := opts.(OptionsWithOptionN); ok {
-					if err := nopts.OptionN(name, values); err != nil {
+					if err := nopts.OptionN(name, values); err == ErrUnknown {
+						return nil, Errorf("unknown option %q", name)
+					} else if err != nil {
 						return nil, Errorf("option %s: %w", name, err)
 					}
 				} else {
-					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
+					panic("Kind() returned TakeTwoArgs but OptionN method is not implemented")
 				}
+
 				args = args[2:]
 				continue
+
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
+
 		default:
 			name = args[0]
+
 			switch opts.Kind(name) {
 			case Required:
 				if len(args) == 1 {
 					return nil, Errorf("option %s requires an argument", name)
 				}
+
 				value = args[1]
 				hasValue = true
 				args = args[2:]
+
 			case Boolean, Optional:
 				args = args[1:]
+
 			case TakeTwoArgs:
 				if len(args) < 3 {
 					return nil, Errorf("option %s requires 2 arguments", name)
 				}
+
 				values := []string{args[1], args[2]}
 				if nopts, ok := opts.(OptionsWithOptionN); ok {
-					if err := nopts.OptionN(name, values); err != nil {
+					if err := nopts.OptionN(name, values); err == ErrUnknown {
+						return nil, Errorf("unknown option %q", name)
+					} else if err != nil {
 						return nil, Errorf("option %s: %w", name, err)
 					}
 				} else {
 					panic("Kind() returns TakeTwoArgs but OptionN method is not implemented")
 				}
+
 				args = args[3:]
 				continue
+
 			default:
 				return nil, Errorf("unknown option %q", name)
 			}
 		}
+
 		if err := opts.Option(name, value, hasValue); err == ErrUnknown {
 			return nil, Errorf("unknown option %q", name)
 		} else if err != nil {
 			return nil, Errorf("option %s: %w", name, err)
 		}
 	}
+
 	if aopts, ok := opts.(OptionsWithArgs); ok {
 		if err := aopts.Args(positional, nil); err != nil {
 			return nil, err
 		}
 	}
+
 	return positional, nil
 }
 

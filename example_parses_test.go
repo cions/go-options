@@ -1,4 +1,4 @@
-// Copyright (c) 2024 cions
+// Copyright (c) 2024-2025 cions
 // Licensed under the MIT License. See LICENSE for details.
 
 package options_test
@@ -89,13 +89,14 @@ func ExampleParseS() {
 
 	// args, err := options.ParseS(opts, os.Args[1:])
 	args, err := options.ParseS(opts, []string{"run", "-v", "file", "--", "cat"})
-	if errors.Is(err, options.ErrHelp) || errors.Is(err, options.ErrNoSubcommand) {
+	switch {
+	case errors.Is(err, options.ErrHelp), errors.Is(err, options.ErrNoSubcommand):
 		fmt.Println("Usage: example [-c FILE] [-v] run [-n] [FILE...] -- COMMAND [ARGS...]")
 		os.Exit(0)
-	} else if errors.Is(err, options.ErrVersion) {
+	case errors.Is(err, options.ErrVersion):
 		fmt.Println("example 1.0.0")
 		os.Exit(0)
-	} else if err != nil {
+	case err != nil:
 		fmt.Fprintf(os.Stdout, "example: error: %v\n", err)
 		os.Exit(2)
 	}
@@ -106,13 +107,14 @@ func ExampleParseS() {
 			ExampleGlobalOptions: *opts,
 		}
 		_, err = options.Parse(runopts, args[1:])
-		if errors.Is(err, options.ErrHelp) {
+		switch {
+		case errors.Is(err, options.ErrHelp):
 			fmt.Println("Usage: example [-c FILE] [-v] run [-n] [FILE...] -- COMMAND [ARGS...]")
 			os.Exit(0)
-		} else if errors.Is(err, options.ErrVersion) {
+		case errors.Is(err, options.ErrVersion):
 			fmt.Println("example 1.0.0")
 			os.Exit(0)
-		} else if err != nil {
+		case err != nil:
 			fmt.Fprintf(os.Stdout, "example: error: %v\n", err)
 			os.Exit(2)
 		}

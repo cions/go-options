@@ -1,13 +1,15 @@
-// Copyright (c) 2024 cions
+// Copyright (c) 2024-2025 cions
 // Licensed under the MIT License. See LICENSE for details.
 
-package options
+package options_test
 
 import (
 	"errors"
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/cions/go-options"
 )
 
 type OptionCall struct {
@@ -21,8 +23,8 @@ type OptionNCall struct {
 	Values []string
 }
 
-func (l OptionNCall) Equal(r OptionNCall) bool {
-	return l.Name == r.Name && slices.Equal(l.Values, r.Values)
+func (a OptionNCall) Equal(b OptionNCall) bool {
+	return a.Name == b.Name && slices.Equal(a.Values, b.Values)
 }
 
 type ArgCall struct {
@@ -39,24 +41,24 @@ type TestOptions struct {
 	After          []string
 }
 
-func (opts *TestOptions) Kind(name string) Kind {
+func (opts *TestOptions) Kind(name string) options.Kind {
 	switch name {
 	case "-a", "-b", "-c", "--boolean":
-		return Boolean
+		return options.Boolean
 	case "-r", "--required":
-		return Required
+		return options.Required
 	case "-o", "--optional":
-		return Optional
+		return options.Optional
 	case "-s", "--set":
-		return TakeTwoArgs
+		return options.TakeTwoArgs
 	case "--number":
-		return Required
+		return options.Required
 	case "--help":
-		return Boolean
+		return options.Boolean
 	case "--version":
-		return Boolean
+		return options.Boolean
 	default:
-		return Unknown
+		return options.Unknown
 	}
 }
 
@@ -72,9 +74,9 @@ func (opts *TestOptions) Option(name, value string, hasValue bool) error {
 			return err
 		}
 	case "--help":
-		return ErrHelp
+		return options.ErrHelp
 	case "--version":
-		return ErrVersion
+		return options.ErrVersion
 	}
 	return nil
 }
@@ -108,21 +110,21 @@ func (opts *TestOptions) Args(before, after []string) error {
 func CompareSlice[S ~[]E, E comparable](t *testing.T, name string, actual, expected S) {
 	t.Helper()
 	if !slices.Equal(actual, expected) {
-		t.Errorf("%s: expected %v, got %v", name, expected, actual)
+		t.Errorf("%s: expected %v, but got %v", name, expected, actual)
 	}
 }
 
 func CompareSliceF[S ~[]E, E interface{ Equal(E) bool }](t *testing.T, name string, actual, expected S) {
 	t.Helper()
 	if !slices.EqualFunc(actual, expected, func(a, b E) bool { return a.Equal(b) }) {
-		t.Errorf("%s: expected %v, got %v", name, expected, actual)
+		t.Errorf("%s: expected %v, but got %v", name, expected, actual)
 	}
 }
 
 func TestParse(t *testing.T) {
 	t.Run("no arguments", func(t *testing.T) {
 		opts := &TestOptions{}
-		args, err := Parse(opts, []string{})
+		args, err := options.Parse(opts, []string{})
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -136,7 +138,7 @@ func TestParse(t *testing.T) {
 
 	t.Run("parse options", func(t *testing.T) {
 		opts := &TestOptions{}
-		args, err := Parse(opts, []string{
+		args, err := options.Parse(opts, []string{
 			"-a", "-b", "-r", "val1", "-rval2", "-o", "val3", "-oval4",
 			"--boolean", "--required=val5", "--required=", "--required", "val6",
 			"--optional=val7", "--optional=", "--optional", "val8", "val9",
@@ -177,7 +179,7 @@ func TestParse(t *testing.T) {
 
 	t.Run("combined short options", func(t *testing.T) {
 		opts := &TestOptions{}
-		args, err := Parse(opts, []string{
+		args, err := options.Parse(opts, []string{
 			"-abc", "-abrval1", "-abr", "val2", "-aboval3", "-abo", "val4",
 		})
 		if err != nil {
@@ -211,7 +213,7 @@ func TestParse(t *testing.T) {
 
 	t.Run("positional arguments", func(t *testing.T) {
 		opts := &TestOptions{}
-		args, err := Parse(opts, []string{
+		args, err := options.Parse(opts, []string{
 			"-a", "--required", "--", "val1", "-b", "--", "val2", "-a", "--required", "val3", "--", "val4",
 		})
 		if err != nil {
@@ -238,89 +240,89 @@ func TestParse(t *testing.T) {
 	})
 
 	t.Run("errors", func(t *testing.T) {
-		_, err := Parse(&TestOptions{}, []string{"--help"})
-		if !errors.Is(err, ErrHelp) {
-			t.Errorf("expected ErrHelp, got %#v", err)
+		_, err := options.Parse(&TestOptions{}, []string{"--help"})
+		if !errors.Is(err, options.ErrHelp) {
+			t.Errorf("expected ErrHelp, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--version"})
-		if !errors.Is(err, ErrVersion) {
-			t.Errorf("expected ErrVersion, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--version"})
+		if !errors.Is(err, options.ErrVersion) {
+			t.Errorf("expected ErrVersion, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--number=NaN"})
+		_, err = options.Parse(&TestOptions{}, []string{"--number=NaN"})
 		if !errors.Is(err, strconv.ErrSyntax) {
-			t.Errorf("expected ErrSyntax, got %#v", err)
+			t.Errorf("expected ErrSyntax, but got %#v", err)
 		}
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
-		}
-
-		_, err = Parse(&TestOptions{}, []string{"-r"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--required"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-r"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--boolean=true"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--required"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--set=name", "value"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--boolean=true"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--set", "value"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--set=name", "value"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-s", "value"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--set", "value"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-svalue"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-s", "value"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-x"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-svalue"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-ax"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-x"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-xa"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-ax"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"--unknown"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"-xa"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 
-		_, err = Parse(&TestOptions{}, []string{"-a-"})
-		if !errors.Is(err, ErrCmdline) {
-			t.Errorf("expected ErrCmdline, got %#v", err)
+		_, err = options.Parse(&TestOptions{}, []string{"--unknown"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
+		}
+
+		_, err = options.Parse(&TestOptions{}, []string{"-a-"})
+		if !errors.Is(err, options.ErrCmdline) {
+			t.Errorf("expected ErrCmdline, but got %#v", err)
 		}
 	})
 }
 
 func TestParsePOSIX(t *testing.T) {
 	opts := &TestOptions{}
-	args, err := ParsePOSIX(opts, []string{
+	args, err := options.ParsePOSIX(opts, []string{
 		"-a", "--required", "--", "val1", "-b", "--", "val2", "-a", "--required", "val3", "--", "val4",
 	})
 	if err != nil {
@@ -352,7 +354,7 @@ func TestParsePOSIX(t *testing.T) {
 
 func TestParseS(t *testing.T) {
 	opts := &TestOptions{}
-	args, err := ParseS(opts, []string{
+	args, err := options.ParseS(opts, []string{
 		"-a", "--required", "--", "val1", "-b", "--", "val2", "-a", "--required", "val3", "--", "val4",
 	})
 	if err != nil {
@@ -382,28 +384,28 @@ func TestParseS(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
-	if !errors.Is(ErrHelp, ErrCmdline) {
-		t.Errorf("ErrHelp is not ErrCmdline")
+	if !errors.Is(options.ErrHelp, options.ErrCmdline) {
+		t.Errorf("ErrHelp should match ErrCmdline")
 	}
-	if !errors.Is(ErrVersion, ErrCmdline) {
-		t.Errorf("ErrVersion is not ErrCmdline")
+	if !errors.Is(options.ErrVersion, options.ErrCmdline) {
+		t.Errorf("ErrVersion should match ErrCmdline")
 	}
-	if !errors.Is(ErrUnknown, ErrCmdline) {
-		t.Errorf("ErrUnknown is not ErrCmdline")
+	if !errors.Is(options.ErrUnknown, options.ErrCmdline) {
+		t.Errorf("ErrUnknown should match ErrCmdline")
 	}
-	if !errors.Is(ErrNoSubcommand, ErrCmdline) {
-		t.Errorf("ErrNoSubcommand is not ErrCmdline")
+	if !errors.Is(options.ErrNoSubcommand, options.ErrCmdline) {
+		t.Errorf("ErrNoSubcommand should match ErrCmdline")
 	}
-	err := Errorf("some error")
-	if !errors.Is(err, ErrCmdline) {
-		t.Errorf("err is not ErrCmdline")
+	err := options.Errorf("some error")
+	if !errors.Is(err, options.ErrCmdline) {
+		t.Errorf("Errorf should return ErrCmdline")
 	}
 
-	werr := Errorf("option -a: %w", strconv.ErrSyntax)
-	if !errors.Is(werr, ErrCmdline) {
-		t.Errorf("werr is not ErrCmdline")
+	werr := options.Errorf("option -a: %w", strconv.ErrSyntax)
+	if !errors.Is(werr, options.ErrCmdline) {
+		t.Errorf("Errorf should return ErrCmdline")
 	}
 	if !errors.Is(werr, strconv.ErrSyntax) {
-		t.Errorf("werr is not strconv.ErrSyntax")
+		t.Errorf("Errorf should wrap an error operand")
 	}
 }
